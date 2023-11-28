@@ -1,0 +1,1053 @@
+
+
+# Pre post invasion meta analisys
+setwd("C:/Users/Propietario/Desktop/Pre_Post_invasion")
+
+folder_name <- "Plots"
+dir.create(folder_name)
+
+
+setwd("C:/Users/Propietario/Desktop/Escritorio/full databse/DATA")
+df <- read_xlsx("Global_dataset.xlsx", sheet = "Sheet1")
+
+head(df)
+
+# ts with invaders
+
+df1<- df %>% filter(Alien =="Y")
+
+unique(df1$taxon)
+
+str(df1)
+
+# First record invader
+first_records <- df1 %>%
+  filter(Alien == "Y") %>%
+  group_by(site_id, taxon) %>%
+  summarize(first_year = min(year)) %>%
+  ungroup()
+
+# Identify instances where two or more invaders arrive in the same year within the same time series
+multiple_invasives <- first_records %>%
+  group_by(site_id, first_year) %>%
+  tally() %>%
+  filter(n > 1) 
+
+earliest_multiple_invasives <- multiple_invasives %>%
+  group_by(site_id) %>%
+  slice_min(order_by = first_year, n = 1) %>%
+  ungroup()
+
+# Number of alien species per time series
+df2<- df1 %>% group_by(site_id, taxon) %>% summarise(Richness =n_distinct(taxon))  %>%
+  group_by(site_id) %>% summarise(Richness = n() )
+
+head(df2)
+
+
+
+df3<- df2 %>% filter(Richness ==1)
+
+
+# Extract unique site_ids
+unique_site_ids1 <- unique(earliest_multiple_invasives$site_id) # more than one invader
+unique_site_ids1 <- unique_site_ids1 %>% as.data.frame()
+unique_site_ids1$n_invaders <- ">1"
+
+unique_site_ids2 <- unique(df3$site_id) # just one invader
+unique_site_ids2 <- unique_site_ids2 %>% as.data.frame()
+unique_site_ids2$n_invaders <- "1"
+
+db_invaders <- rbind(unique_site_ids1,unique_site_ids2)
+colnames(db_invaders)[1] <- "site_id"
+db_invaders <- db_invaders[!duplicated(db_invaders$site_id), ]
+
+
+############# Time series with only 1 invader ################
+
+db_invaders1 <- db_invaders %>% filter(n_invaders==1)
+
+d1<- df %>% filter(site_id %in% unique(db_invaders1$site_id))
+
+
+
+############################            Inspect data           ####################################
+invader_data <- d1 %>% filter(Alien == 'Y')
+
+# Calculate the length of the time series for each site_id
+time_series_length <- d1 %>%
+  group_by(site_id) %>%
+  summarise(min_year = min(year), max_year = max(year)) %>%
+  mutate(length = max_year - min_year + 1)
+
+first_record_invader <- invader_data %>%
+  group_by(site_id) %>%
+  summarise(first_record_year = min(year))
+
+# Join the data
+plot_data <- left_join(time_series_length, first_record_invader, by = "site_id")
+
+ggplot(plot_data, aes(x = as.factor(site_id))) +
+  geom_bar(aes(y = length), stat = "identity", fill = "blue", alpha = 0.6) +
+  geom_point(aes(y = first_record_year - min_year), color = "red", size = 2) +
+  labs(y = "Year", title = "Length of Time Series and First Record of Invader") +
+  theme_minimal() + coord_flip()+ 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+# Part 2:
+invader_data <- d1 %>% filter(Alien == 'Y')
+
+time_series_length <- d1 %>%
+  group_by(site_id) %>%
+  summarise(min_year = min(year), max_year = max(year)) %>%
+  mutate(length = max_year - min_year + 1)
+
+first_record_invader <- invader_data %>%
+  group_by(site_id) %>%
+  summarise(first_record_year = min(year))
+
+# Join the data and filter out time series with invaders in the first year
+plot_data <- left_join(time_series_length, first_record_invader, by = "site_id") %>%
+  filter(min_year != first_record_year | is.na(first_record_year))
+
+df_summary <- df %>%
+  group_by(site_id) %>%
+  summarize(country = first(country))
+
+plot_data_combined <- left_join(plot_data, df_summary, by = "site_id")
+plot_data_combined$country <- as.factor(plot_data_combined$country)
+
+my_colors <- c("France" = "blue", "Spain" = "green", "Germany" = "red",
+               "Sweden" = "blue", "Luxembourg" = "green", "Bulgaria" = "red",
+               "Denmark" = "blue", "UK" = "green", "Ireland" = "red",
+               "Norway" = "blue", "Hungary" = "green", "Belgium" = "red") 
+
+my_colors <- brewer.pal(12, "Set3")
+
+
+ggplot(plot_data_combined, aes(x = reorder(site_id, -length), y = length, fill = country)) +
+  geom_bar(stat = "identity", alpha = 1.1) +
+  geom_point(aes(y = first_record_year - min_year), color = "red", size = 2) +
+  labs(y = "Year", x="") +
+  theme_minimal() +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 35), breaks = seq(0, 35, by = 5)) + 
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text = element_text(size=12) #
+  ) +
+  scale_fill_manual(values = my_colors)  # 
+
+unique(plot_data_combined$site_id) # 180 time series
+
+#######################################################################################################
+
+plot_data
+
+plot_data$min_yearss <- plot_data$first_record_year- plot_data$min_year
+
+plot_data<- plot_data %>% filter(min_yearss >1)
+
+unique(plot_data$site_id) # 160 time series
+
+
+## Full database with 1 invader
+data<- df %>% filter(site_id %in% unique(plot_data$site_id))
+data1 <- data1[,c(1:4)]
+
+time_series <- unique(data$site_id)
+combined_df <- data.frame()
+
+for(i in 1:length(time_series)){
+  
+  subset_df <- data1 %>% filter(site_id == time_series[i]) 
+    
+    # Extract the unique species from the subseted dataframe
+    species <- unique(subset_df$taxon)
+    
+    for(j in 1:length(species)){
+      
+      # Subset the data frame to include only the current species
+      subset_species_df <- subset_df %>% filter(taxon == species[j])
+      
+      # check if the species has less than 2 values
+      if(sum(!is.na(subset_species_df$abundance[subset_species_df$taxon == species[j]])) < 2) {
+        # if true, skip the loop for this species
+        next
+      }
+      
+      subset_species_df <- subset_species_df %>%  group_by(site_id)  %>% 
+        complete(year = seq(min(year), max(year), period = 1))   
+      
+      sampling_years <- unique(subset_df$year)
+      
+      subset_species_df2 <- subset_species_df %>% filter(year %in% sampling_years)
+      
+      subset_species_df2$taxon <- species[j]
+      subset_species_df2[is.na(subset_species_df2)] = 0
+      
+      subset_species_df3 <- subset_species_df2 %>%  group_by(site_id)  %>% 
+        complete(year = seq(min(year), max(year), period = 1)) 
+      
+      subset_species_df3$taxon <- species[j]
+      
+      subset_species_df3$abundance<- as.numeric(subset_species_df3$abundance)
+      Paride <- complete(mice(subset_species_df3, m = 5, maxit =50, method = "pmm", seed = 123))
+      
+      # Bind the result to the combined dataframe
+      combined_df <- rbind(combined_df, Paride)
+      
+      cat("\n The loop for-->",time_series[i])
+    }
+  }
+
+
+write_xlsx(result1,"Time_series_all_invaders_filled.xlsx")
+
+
+setwd("C:/Users/Propietario/Desktop/Pre_Post_invasion")
+
+
+combined_df <- read_xlsx("Time_series_all_invaders_filled.xlsx")
+result1 <- combined_df
+join_data <- unique(df[, c("site_id","country")])
+join_data1 <- unique(df[, c("taxon","country","Alien")])
+
+result <- left_join(combined_df, join_data, by = "site_id")
+result1 <- left_join(result, join_data1, by = c("taxon", "country"))
+
+unique(result1$site_id) # 231 ts ---> 42ts are dropped becasue there are only 1 occ of invader
+
+
+unique(z$site_id)
+unique(result1$country)
+result1<- data1 
+
+
+str(df)
+first_record <- result1 %>% 
+  filter(Alien == "Y") %>% 
+  group_by(site_id) %>% 
+  summarise(primer_año = min(year)) %>% 
+  ungroup()
+
+# Dividir la base de datos en 'pre' y 'post'
+result <- result1 %>% 
+  left_join(first_record, by = "site_id") %>% 
+  mutate(periodo = ifelse(is.na(primer_año), NA, 
+                          ifelse(year < primer_año, "pre", "post")))
+names(result)
+result<- result[,c(3,4,1,5,2,6,7,8)]
+
+result <- result  %>% 
+  mutate(periodo2 = ifelse(is.na(primer_año), NA, 
+                          ifelse(year < primer_año, "pre", 
+                                 ifelse(year < primer_año + 5, "early invasion", "late invasion"))))
+
+#Note: those alien records with only 1 observations were removed 
+
+ #########  Calculate community metrics:   #####
+
+result$abundance <- replace_na(result$abundance, 0)
+result<- result %>% filter(abundance > 0)
+unique(result$site_id) # 231 ts
+
+
+pre_invasion <- result %>% 
+  # filter(!str_detect(taxon, "/")) %>% 
+  filter(periodo == "pre") %>%  
+  group_by(site_id,year) %>% 
+  summarise(
+    Yearly_Abundance_pre = sum(abundance, na.rm=T),
+    Yearly_Richness_pre = n_distinct(taxon),
+    # Calculate Shannon diversity index for each year
+    Shannon_pre = -sum((abundance/Yearly_Abundance_pre) * log(abundance/Yearly_Abundance_pre, base = exp(1)), na.rm=T)) %>% 
+  # Calculate evenness
+  mutate(Evenness_pre = Shannon_pre / log(Yearly_Richness_pre) )
+
+invader_present <- result %>% 
+  filter(periodo == "post" & Alien == "Y") %>%
+  dplyr::select(site_id, year) %>%
+  distinct()
+
+filtered_result <- result %>%
+  inner_join(invader_present, by = c("site_id", "year"))
+
+# Now calculate the metrics using this filtered_result dataframe
+post_invasion1 <- filtered_result %>% filter(Alien=="N") %>% 
+  filter(periodo2 == "early invasion") %>% 
+#  filter(!str_detect(taxon, "/")) %>% 
+  group_by(site_id,year) %>% 
+  summarise(
+    Yearly_Abundance_post = sum(abundance, na.rm=T),
+    Yearly_Richness_post = n_distinct(taxon),
+    Shannon_post = -sum((abundance/Yearly_Abundance_post) * log(abundance/Yearly_Abundance_post, base = exp(1)), na.rm=T)) %>% 
+  mutate(Evenness_post = Shannon_post / log(Yearly_Richness_post))
+
+
+post_invasion2 <- filtered_result %>% filter(Alien=="N") %>% 
+  filter(periodo2 == "late invasion") %>%  
+#  filter(!str_detect(taxon, "/")) %>% 
+  group_by(site_id,year) %>% 
+  summarise(
+    Yearly_Abundance_post = sum(abundance, na.rm=T),
+    Yearly_Richness_post = n_distinct(taxon),
+    Shannon_post = -sum((abundance/Yearly_Abundance_post) * log(abundance/Yearly_Abundance_post, base = exp(1)), na.rm=T)) %>% 
+  mutate(Evenness_post = Shannon_post / log(Yearly_Richness_post))
+
+###########  Calculate the effect size G Hedges #####
+
+metrics <- c("Abundance", "Richness", "Shannon", "Evenness")
+
+
+time_series <- unique(pre_invasion$site_id) # 189 ts
+time_series <- unique(post_invasion1$site_id) #  189 ts
+time_series <- unique(post_invasion2$site_id) # 140 ts
+
+n <- time_series[1]
+r <- 0.5 #assume no effect
+
+results_df <- data.frame()
+
+for (n in time_series) {
+
+   pre_invasion1 <- pre_invasion[pre_invasion$site_id ==n, ]  # pre
+   
+   post_invasion11 <- post_invasion1[post_invasion1$site_id ==n, ] # post
+   
+   if (n %in% post_invasion2$site_id){
+     post_invasion22 <- post_invasion2[post_invasion2$site_id ==n, ] # post
+   }
+   
+for (col in metrics) {
+  
+  pre_invasion2 <- pre_invasion1[, grepl(col, names(pre_invasion1))] # filter by each metric
+  post_invasion20 <- post_invasion11[, grepl(col, names(post_invasion11))] # filter by each metric
+  post_invasion3 <- post_invasion22[, grepl(col, names(post_invasion22))] # filter by each metric
+  
+ 
+  metric_pre <- pre_invasion2 %>% as.data.frame()
+  metric_post <- post_invasion20 %>% as.data.frame()
+  metric_post2 <- post_invasion3 %>% as.data.frame()
+  
+  
+  Y1 <- mean(metric_pre[,1], na.rm=T)
+  Y2 <- mean(metric_post[,1], na.rm=T)
+  Y3 <- mean(metric_post2[,1], na.rm=T)
+  
+  
+  # Calcular la desviación estándar de las diferencias
+  S_diff <- sd(c(metric_pre[,1], metric_post[,1]), na.rm=T)
+  S_diff2 <- sd(c(metric_pre[,1], metric_post2[,1]), na.rm=T)
+  
+   # Cohens D
+  S_within <- S_diff / sqrt(2*(1-r))
+  S_within2 <- S_diff2 / sqrt(2*(1-r))
+  
+  # Cohens D 
+  d <- (Y2-Y1) / S_within
+  
+  if (Y3 > 0 ){
+  d2 <- (Y3-Y1) / S_within2
+  n3 <- nrow(metric_pre)+ nrow(metric_post2)
+  v_d2 = (1/n3 + d2^2/(2*n3)) * 2 * (1 - r)
+  j2 = 1 - (3 / (4*(n3 - 1) - 1))
+  g2 = j2 * d2 
+  v_g2 = j2^2 * v_d2
+  }
+  
+ # sample size
+  n2 <- nrow(metric_pre)+ nrow(metric_post)
+  
+  # Variance D
+  v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+  
+  # Correction factor
+  j = 1 - (3 / (4*(n2 - 1) - 1))
+  
+  # Hedges G
+  g = j * d 
+  # Variance
+  v_g = j^2 * v_d
+
+    
+  results_df <- rbind(results_df, data.frame(site_id= n, 
+                                             metric=col, 
+                                             Pre=Y1, 
+                                             Early_Post=Y2, 
+                                             Late_Post=Y3, 
+                                             sample_size_early=n2,
+                                             sample_size_late=n3,
+                                             G_Hedges_early=g,
+                                             G_Hedges_late=g2,
+                                             variance_G_early=v_g,
+                                             variance_G_late=v_g2))
+}  
+   cat(paste0("Completed time series: ", n, "\n"))
+}
+  
+
+metrics <- c("Abundance", "Richness", "Shannon", "Evenness")
+time_series <- unique(c(pre_invasion$site_id, post_invasion1$site_id, post_invasion2$site_id))
+r <- 0.5 # Asume sin efecto
+
+results_df1 <- data.frame()
+for (n in time_series) {
+  
+  pre_invasion1 <- pre_invasion[pre_invasion$site_id ==n, ]  # pre
+  
+  post_invasion11 <- post_invasion1[post_invasion1$site_id ==n, ] # post
+  
+  for (col in metrics) {
+    
+    pre_invasion2 <- pre_invasion1[, grepl(col, names(pre_invasion1))] # filter by each metric
+    post_invasion20 <- post_invasion11[, grepl(col, names(post_invasion11))] # filter by each metric
+
+    
+    metric_pre <- pre_invasion2 %>% as.data.frame()
+    metric_post <- post_invasion20 %>% as.data.frame()
+
+    
+    Y1 <- mean(metric_pre[,1], na.rm=T)
+    Y2 <- mean(metric_post[,1], na.rm=T)
+
+    
+    # Calcular la desviación estándar de las diferencias
+    S_diff <- sd(c(metric_pre[,1], metric_post[,1]), na.rm=T)
+    
+    # Cohens D
+    S_within <- S_diff / sqrt(2*(1-r))
+
+    # Cohens D 
+    d <- (Y2-Y1) / S_within
+    
+    # sample size
+    n2 <- nrow(metric_pre)+ nrow(metric_post)
+    
+    # Variance D
+    v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+    
+    # Correction factor
+    j = 1 - (3 / (4*(n2 - 1) - 1))
+    
+    # Hedges G
+    g = j * d 
+    # Variance
+    v_g = j^2 * v_d
+    
+    
+    results_df1 <- rbind(results_df1, data.frame(site_id= n, 
+                                               metric=col, 
+                                               Pre=Y1, 
+                                               Early_Post=Y2, 
+                                               sample_size_early=n2,
+                                               G_Hedges_early=g,
+                                               variance_G_early=v_g))
+  }  
+  cat(paste0("Completed time series: ", n, "\n"))
+}
+
+
+time_series <- unique(post_invasion2$site_id) # 140 ts
+
+n <- time_series[1]
+r <- 0.5 #assume no effect
+results_df2 <- data.frame()
+
+for (n in time_series) {
+  
+  pre_invasion1 <- pre_invasion[pre_invasion$site_id ==n, ]  # pre
+  
+  if (n %in% post_invasion2$site_id){
+    post_invasion22 <- post_invasion2[post_invasion2$site_id ==n, ] # post
+  }
+  
+  for (col in metrics) {
+    
+    pre_invasion2 <- pre_invasion1[, grepl(col, names(pre_invasion1))] # filter by each metric
+    post_invasion3 <- post_invasion22[, grepl(col, names(post_invasion22))] # filter by each metric
+    
+    metric_pre <- pre_invasion2 %>% as.data.frame()
+    metric_post2 <- post_invasion3 %>% as.data.frame()
+    
+    Y1 <- mean(metric_pre[,1], na.rm=T)
+    Y3 <- mean(metric_post2[,1], na.rm=T)
+    
+    
+    # Calcular la desviación estándar de las diferencias
+    S_diff2 <- sd(c(metric_pre[,1], metric_post2[,1]), na.rm=T)
+    
+    # Cohens D
+    S_within2 <- S_diff2 / sqrt(2*(1-r))
+    
+      d2 <- (Y3-Y1) / S_within2
+      n3 <- nrow(metric_pre)+ nrow(metric_post2)
+      v_d2 = (1/n3 + d2^2/(2*n3)) * 2 * (1 - r)
+      j2 = 1 - (3 / (4*(n3 - 1) - 1))
+      g2 = j2 * d2 
+      v_g2 = j2^2 * v_d2
+    
+    
+    
+    results_df2 <- rbind(results_df2, data.frame(site_id= n, 
+                                               metric=col, 
+                                               Pre=Y1, 
+                                               Late_Post=Y3, 
+                                               sample_size_late=n3,
+                                               G_Hedges_late=g2,
+                                               variance_G_late=v_g2))
+  }  
+  cat(paste0("Completed time series: ", n, "\n"))
+}
+results_df1$Stage <- "Early"
+results_df2$Stage <- "Late"
+
+names(results_df1)
+names(results_df2)
+colnames(results_df2) <- c("site_id","metric","Pre","Early_Post","sample_size_early","G_Hedges_early",
+                          "variance_G_early","Stage")
+
+res<- rbind(results_df1, results_df2)
+
+write.xlsx(res,"Effect_size_all.xlsx")
+
+str(results_df)
+
+
+#### More than one invader  ####
+
+earliest_multiple_invasives
+
+d2<- df %>% filter(site_id %in% unique(earliest_multiple_invasives$site_id))
+unique(d2$site_id)
+
+
+#### 
+invader_data <- d2 %>% filter(Alien == 'Y')
+
+time_series_length <- d2 %>%
+  group_by(site_id) %>%
+  summarise(min_year = min(year), max_year = max(year)) %>%
+  mutate(length = max_year - min_year + 1)
+
+first_record_invader <- invader_data %>%
+  group_by(site_id) %>%
+  summarise(first_record_year = min(year))
+
+plot_data <- left_join(time_series_length, first_record_invader, by = "site_id") %>%
+  filter(min_year != first_record_year | is.na(first_record_year))
+
+
+ggplot(plot_data, aes(x = as.factor(site_id))) +
+  geom_bar(aes(y = length), stat = "identity", fill = "blue", alpha = 0.6) +
+  geom_point(aes(y = first_record_year - min_year), color = "red", size = 2) +
+  labs(y = "Year", title = "Length of Time Series and First Record of Invader (Excluding First Year)") +
+  theme_minimal() + coord_flip()
+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+unique(plot_data$site_id) # 71 time series
+
+# combine ts with 1 and more invaders
+head(plot_data)
+plot_data$dif <- plot_data$first_record_year - plot_data$min_year
+plot_data1<- plot_data %>% filter(dif >1)
+
+plot_data$invaders <- "1"
+plot_data1$invaders <- "2"
+data <- rbind(plot_data[,c(1:5,7)],  plot_data1[,c(1:5,7)])
+data<- plot_data1
+unique(data$site_id) #231
+
+data1 <- df %>% filter(site_id %in% unique(data$site_id))
+write_xlsx(data1, "Time_series_all_invaders.xlsx")
+
+# Then go above to run the loop to fill the gaps and obtain and effect size
+
+
+
+# See how many invaders in each time series
+earliest_multiple_invasives
+results_df
+
+
+result_df2 <- results_df %>%
+  left_join(earliest_multiple_invasives, by = "site_id")
+colnames(result_df2)[13] <- "Number_invaders"
+result_df2$Number_invaders <- replace_na(result_df2$Number_invaders, 1)
+
+unique(result_df2$site_id) # 189
+
+write_xlsx(result_df2, "Effect_size_all.xlsx")
+
+
+
+
+
+
+
+##### Functional metrics PRE invasion ####
+
+setwd("C:/Users/Propietario/Desktop/Pre_Post_invasion/")
+
+
+data<- read_excel("Paride_traits1.xlsx")
+filled_data <-data  
+filled_data  <-filled_data[,-c(1:5)]
+
+for(col in seq_along(filled_data)) {
+  if(is.character(data_with_na[[col]])) {
+    num_conversion <- as.numeric(as.character(data_with_na[[col]]))
+    if(!any(is.na(num_conversion))) {
+      data_with_na[[col]] <- num_conversion
+    }
+  }
+}
+
+for(col in seq_along(filled_data)) {
+  column_mean <- round(mean(filled_data[[col]], na.rm = TRUE))
+  filled_data[[col]] <- ifelse(is.na(filled_data[[col]]), column_mean, filled_data[[col]])
+}
+
+
+rows_with_na <- apply(filled_data, 1, function(x) any(is.na(x)))
+data_with_na <- data[rows_with_na, ]
+
+data_with_na = data_with_na[!duplicated(data_with_na$taxon), ]
+data_with_na = data_with_na[,-c(1,3,4,5)]
+na_count_per_row <- apply(data_with_na, 1, function(x) sum(is.na(x)))
+data_with_na$na_count_per_row <- na_count_per_row
+
+
+filled_data$site_id<- data$site_id
+filled_data$year<-  data$year
+filled_data$taxon<- data$taxon
+
+as.factor(data$site_id)
+as.factor(data$year)
+
+colnames(data)
+unique(data$Alien) # there is only N
+
+data2<- data %>%
+  group_by(site_id, year, taxon) %>%
+  summarise(abundance = sum(Abundance, na.rm = TRUE)) %>%
+  spread(key = taxon, value = abundance, fill = 0) %>%
+  as.data.frame()
+
+data2<- data2 %>%
+  mutate(Plot = paste0(site_id, "_", year))
+
+data2$Plot<- as.factor(data2$Plot)
+
+species_matrix<- data2[, -c(1,2)]
+rownames(species_matrix) <- species_matrix$Plot
+species_matrix$Plot <- NULL
+
+
+
+data3<- data %>%
+  distinct(taxon, .keep_all = TRUE, na.rm = TRUE) %>%
+  as.data.frame()
+
+colnames(data3)
+
+data3$taxon<-as.factor(data3$taxon)
+
+trait_matrix<- data3[, c(2, 6:72)]
+rownames(trait_matrix) <- trait_matrix$taxon
+trait_matrix$taxon <- NULL
+
+
+# alphabetical order
+trait_matrix <- trait_matrix[order(rownames(trait_matrix)), ]
+species_matrix <- species_matrix[, order(names(species_matrix))]
+
+species_matrix<- as.matrix(species_matrix)
+
+metrics<- dbFD(trait_matrix, species_matrix)
+
+FRic<-as.vector(metrics[["FRic"]])
+FEve<-as.vector(metrics[["FEve"]])
+FDiv<-as.vector(metrics[["FDiv"]])
+FDis<-as.vector(metrics[["FDis"]])
+
+
+
+
+
+
+
+
+
+
+
+
+-#### Plot density #####
+results_df$metric[results_df$metric == "Shannon"] <- "Shannon diversity"
+
+results_df$metric <- factor(results_df$metric, levels=c("Abundance", "Richness", "Shannon diversity", "Evenness"))
+
+my_plot<- ggplot(results_df, aes(x=G_Hedges_late)) +
+  geom_density(aes(y=..density..), color="black", fill="grey", alpha=0.7) + xlim(-3.5,3.5)+
+  theme_bw() +  geom_vline(xintercept = 0, linetype="dashed",  color = "grey1", size=0.8)+ facet_wrap(~metric)+
+  labs(x="G Hedges", y="Density")
+my_plot
+
+ggsave(filename = paste0(folder_name, "/density_plot.svg"), plot = my_plot, width = 10, height = 6)
+  
+
+
+
+
+########### Meta-analyses Community metrics ##########
+
+# Overall
+library(metafor)
+names(df_tidy)
+
+df_tidy <- left_join(res, df_summary, by = "site_id")
+df_tidy1 <- left_join(df_tidy, earliest_multiple_invasives, by = "site_id")
+colnames(df_tidy1)[11] <- "Number_invaders"
+df_tidy1$Number_invaders <- replace_na(df_tidy1$Number_invaders, 1)
+
+df_tidy1$Number_invaders <- as.numeric(df_tidy1$Number_invaders)
+
+res0 <- rma.mv(G_Hedges_early, variance_G_early, 
+               random = ~ 1 | country/site_id, data = df_tidy1)
+
+res0
+
+res1 <- rma.mv(G_Hedges_early, variance_G_early, 
+              random = ~ 1 | country/site_id,  mods = ~ metric * Stage, data = df_tidy)
+
+res1
+
+
+
+QE <- 7543.8154
+df <- 1304
+
+I2 <- ((QE - df) / QE) * 100
+I2
+
+forest(res1, showweights = T, order="obs", slab= result_df2$site_id)
+
+#Example of Egger test (Repeated for each model)
+
+resid <- rstandard(res_full)
+eggers <- regtest(x = resid$resid, sei =sqrt(df_full$var), model = "lm") 
+
+#Funnel plot
+funnel(res_full, 
+       back = "white", 
+       xlab = "Model residuals", 
+       ylab = "Effect size standard error", 
+       pch = 21,
+       col = "darkblue",
+       cex = 1.2,
+       cex.lab = 1.3,
+       cex.axis = 1.1,
+       lwd = 2
+)
+# Put eggers regression results on funnel plot
+eggers_round <- round(eggers$pval, 2)
+plt_text <- paste0("Regression test for plot symmetry \n\t\t  p = ", eggers_round, "\n\n")
+legend(legend = plt_text, x = 0.5, y = -0.01, bg = alpha("darkgrey", 0.2))
+
+
+
+#Heterogeneity I2
+W <- diag(1/df1$Var_Dv)
+X <- model.matrix(res)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+I2 <- 100 * res$sigma2 / (sum(res$sigma2) + (res$k-res$p)/sum(diag(P)))
+names(I2) <- c("Easy")
+round(I2, 2)
+cat("Total I2: ", round(sum(I2), 2))
+
+
+
+### Cook's distances for each study!
+
+cooks_dist <- cooks.distance(res_full, cluster=df_full$id)
+df_full$id <- as.character(df_full$id)
+
+df_cooks <- data.frame(id = names(cooks_dist), cooks_dist = cooks_dist)
+
+df_cooks <- df_cooks %>% 
+  left_join(df_full, by = "id") %>%
+  select(id, authors, cooks_dist)
+# Remove leading spaces
+df_cooks$authors <- str_remove(df_cooks$authors, "^\\s")
+df_cooks <- df_cooks %>%
+  filter(!duplicated(authors)) %>%
+  arrange(authors)
+df_cooks$authors <- author_format(df_cooks$authors)
+
+ggplot(data = df_cooks, aes(x = authors, y = cooks_dist, group = 1)) + 
+  geom_point(color = "deepskyblue4") +
+  geom_line(color = "deepskyblue4") + 
+  geom_segment(aes(xend=authors), yend = 0, color = "darkgrey", linetype = 2) + 
+  geom_hline(yintercept = mean(cooks_dist), color = "darkred", linetype = 2) + 
+  xlab("Studies") + ylab("Cook\u2019s distance") + 
+  scale_x_discrete(limits = rev(df_cooks$authors)) + 
+  theme_minimal() + 
+  theme(
+    axis.line = element_line(color = "black"),
+    axis.text.y = element_markdown(color = "black", size = 12),
+    axis.title.y = element_markdown(color = "black", size = 16),
+    axis.text.x = element_text(color = "black", size = 12),
+    axis.title.x = element_markdown(color = "black", size = 16),
+  ) + 
+  coord_flip() 
+
+
+
+
+
+
+
+##############################           PLOTS        #########################################
+
+
+# Figure 1: 
+
+#European map
+
+df<- df %>% filter(site_id %in% unique(pre_invasion$site_id))
+unique(df$site_id)
+df <- df[!duplicated(df$Longitude_X), ]
+
+
+
+
+
+
+
+
+
+
+###################### try 2.0 #######################
+# In this case lets do it based only in abundance per species (not imputed values)
+
+head(result)
+unique(result$site_id)
+
+
+pre_invasion <- result %>% 
+  filter(periodo == "pre") %>%  
+  group_by(site_id,taxon) %>% 
+  summarise(
+    Yearly_Abundance_pre = mean(abundance, na.rm=T),
+    years =n())
+
+invader_present <- result %>% 
+  filter(periodo == "post" & Alien == "Y") %>%
+  dplyr::select(site_id, year) %>%
+  distinct()
+
+filtered_result <- result %>%
+  inner_join(invader_present, by = c("site_id", "year"))
+
+
+post_invasion1 <- filtered_result %>% filter(Alien=="N") %>% 
+  filter(periodo2 == "early invasion") %>% 
+  group_by(site_id,taxon) %>% 
+  summarise(
+    Yearly_Abundance_pre = mean(abundance, na.rm=T),
+    years =n())
+
+
+post_invasion2 <- filtered_result %>% filter(Alien=="N") %>% 
+  filter(periodo2 == "late invasion") %>%  
+  group_by(site_id,taxon) %>% 
+    summarise(
+      Yearly_Abundance_pre = mean(abundance, na.rm=T),
+      years =n())
+
+
+
+#### Extract effect size #####
+time_series <- unique(pre_invasion$site_id) # 
+time_series <- unique(post_invasion1$site_id) #  
+time_series <- unique(post_invasion2$site_id) # 1
+n <- time_series[1]
+r <- 0.5 
+results_df1 <- data.frame()
+for (n in time_series) {
+  
+  pre_invasion1 <- pre_invasion[pre_invasion$site_id ==n, ]  # pre
+  
+  post_invasion11 <- post_invasion1[post_invasion1$site_id ==n, ] # post
+  
+  species <- unique(pre_invasion1$taxon)
+  
+  for (sp in species) {
+    
+    pre_invasion2 <- pre_invasion1[pre_invasion1$taxon ==sp, ] # filter by each sp
+    
+    if (sp %in% post_invasion11$taxon) { 
+    post_invasion20 <- post_invasion11[post_invasion11$taxon ==sp, ] # filter by each metric
+    } else {
+      message("no match las especies")
+      next 
+    }
+    
+    metric_pre <- pre_invasion2$Yearly_Abundance_pre
+    metric_post <- post_invasion20$Yearly_Abundance_pre
+    
+    
+    Y1 <- mean(metric_pre, na.rm=T)
+    Y2 <- mean(metric_post, na.rm=T)
+    
+    
+    # Calcular la desviación estándar de las diferencias
+    S_diff <- sd(c(metric_pre, metric_post), na.rm=T)
+    
+    # Cohens D
+    S_within <- S_diff / sqrt(2*(1-r))
+    
+    # Cohens D 
+    d <- (Y2-Y1) / S_within
+    
+    # sample size
+    n2 <- pre_invasion2$years + post_invasion20$years
+    
+    # Variance D
+    v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+    
+    # Correction factor
+    j = 1 - (3 / (4*(n2 - 1) - 1))
+    
+    if (n2 == 2) {
+      g = d
+      v_g = v_d
+    } else {
+    
+    # Hedges G
+    g = j * d 
+    # Variance
+    v_g = j^2 * v_d
+    }
+    
+    results_df1 <- rbind(results_df1, data.frame(site_id= n, 
+                                                 taxa=sp, 
+                                                 Pre=Y1, 
+                                                 Early_Post=Y2, 
+                                                 sample_size_early=n2,
+                                                 G_Hedges_early=g,
+                                                 variance_G_early=v_g))
+  }  
+  cat(paste0("Completed time series: ", n, "\n"))
+}
+
+
+
+time_series <- unique(post_invasion2$site_id) # 140 ts
+n <- time_series[1]
+results_df2 <- data.frame()
+
+for (n in time_series) {
+  
+  pre_invasion1 <- pre_invasion[pre_invasion$site_id ==n, ]  # pre
+  
+  if (n %in% post_invasion2$site_id){
+    post_invasion22 <- post_invasion2[post_invasion2$site_id ==n, ] # post
+  }
+  
+  species <- unique(pre_invasion1$taxon)
+  
+  for (sp in species) {
+    
+    pre_invasion2 <- pre_invasion1[pre_invasion1$taxon ==sp, ] # filter by each sp
+    
+    if (sp %in% post_invasion11$taxon) { 
+      post_invasion20 <- post_invasion11[post_invasion11$taxon ==sp, ] # filter by each metric
+    } else {
+      message("no match las especies")
+      next 
+    }
+    
+    metric_pre <- pre_invasion2$Yearly_Abundance_pre
+    metric_post <- post_invasion20$Yearly_Abundance_pre
+    
+    
+    Y1 <- mean(metric_pre, na.rm=T)
+    Y2 <- mean(metric_post, na.rm=T)
+    
+    
+    # Calcular la desviación estándar de las diferencias
+    S_diff <- sd(c(metric_pre, metric_post), na.rm=T)
+    
+    # Cohens D
+    S_within <- S_diff / sqrt(2*(1-r))
+    
+    # Cohens D 
+    d <- (Y2-Y1) / S_within
+    
+    # sample size
+    n2 <- pre_invasion2$years + post_invasion20$years
+    
+    # Variance D
+    v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+    
+    # Correction factor
+    j = 1 - (3 / (4*(n2 - 1) - 1))
+    
+    if (n2 == 2) {
+      g = d
+      v_g = v_d
+    } else {
+    
+    # Hedges G
+    g = j * d 
+    # Variance
+    v_g = j^2 * v_d
+    }
+    
+    results_df2 <- rbind(results_df2, data.frame(site_id= n, 
+                                                 taxa=sp, 
+                                                 Pre=Y1, 
+                                                 Early_Post=Y2, 
+                                                 sample_size_early=n2,
+                                                 G_Hedges_early=g,
+                                                 variance_G_early=v_g))
+  }  
+  cat(paste0("Completed time series: ", n, "\n"))
+}
+
+results_df1$Stage <- "Early"
+results_df2$Stage <- "Late"
+
+names(results_df1)
+names(results_df2)
+colnames(results_df2) <- c("site_id","taxa","Pre","Early_Post","sample_size_early","G_Hedges_early",
+                           "variance_G_early","Stage")
+
+res<- rbind(results_df1, results_df2)
+
+############  Meta-analyses ######
+df_tidy <- left_join(res, df_summary, by = "site_id")
+df_tidy1 <- df_tidy %>% filter(!variance_G_early=="1")
+
+res0 <- rma.mv(G_Hedges_early, variance_G_early, 
+               random = ~ 1 | country/site_id, data = df_tidy1 )
+
+res0
+
+res1 <- rma.mv(G_Hedges_early, variance_G_early, 
+               random = ~ 1 | country/site_id,  mods = ~ Stage, data = df_tidy1)
+
+res1
+
+
+
+
+
+
+
+
+
