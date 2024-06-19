@@ -32,4 +32,4 @@ Biological invasions pose a major threat to biodiversity, ecosystem functioning,
 
 For citation and licensing information, please view [CITATION.md](CITATION.md).
 
-<img align="right" src="Figure/New_Figure2.svg" width="400" style="margin-top: 40px">
+<img align="center" src="Figure/New_Figure2.svg" width="400" style="margin-top: 40px">
