@@ -1,0 +1,438 @@
+
+#### Effect size(s) ----  
+
+time_series <- unique(pre_invasion$site_id) # 297
+time_series1 <- unique(post_invasion1$site_id) # 297  
+time_series2 <- unique(post_invasion2$site_id) # 200
+
+## Richness 
+stage <- c("early", "late")
+
+r <- 0.5 # Asume sin efecto
+results_df1 <- data.frame()
+
+
+for (s in stage) {
+  
+  if(s =="early") {
+    time_series <-time_series1
+  } else {
+    time_series <-time_series2
+  }
+  
+  for (n in time_series) {
+    
+    pre_invasion1 <- pre_invasion[pre_invasion$site_id == n, ]
+    if(s =="early") {
+      post_invasion <-post_invasion1
+    } else {
+      post_invasion <-post_invasion2
+    }
+  
+    post_invasion0 <- post_invasion[post_invasion$site_id == n, ]
+    
+    pre_invasion2 <- pre_invasion1   %>% 
+      #filter(!str_detect(taxon, "/")) %>% 
+      group_by(site_id,year)  %>%
+      summarise(Richness= n_distinct(taxon)) %>% mutate(years= n())
+    
+    
+    if (n %in% unique(post_invasion0$site_id) ) {
+      post_invasion11 <- post_invasion0[post_invasion0$site_id ==n, ] # post
+      
+      post_invasion20 <- post_invasion11   %>% 
+        #filter(!str_detect(taxon, "/"))  %>%
+        group_by(site_id,year)  %>%
+        summarise(Richness= n_distinct(taxon)) %>% mutate(years= n())
+      
+    }  else {
+      message("no match time series")
+      next 
+    }
+    
+    metric_pre <- pre_invasion2$Richness
+    metric_post <- post_invasion20$Richness
+    
+    std_dev_pre <- sd(metric_pre)
+    std_dev_post <- sd(metric_post)
+    
+    Y1 <- mean(metric_pre, na.rm=T)
+    Y2 <- mean(metric_post, na.rm=T)
+    
+    n_pre <- length(metric_pre)
+    n_post <- length(metric_post)
+    
+    # Calculate pooled standard deviation
+    sd_pooled <- sqrt(((n_pre - 1) * std_dev_pre^2 + (n_post - 1) * std_dev_post^2) / (n_pre + n_post - 2))
+    
+    # Cohens D 
+    d <- (Y2-Y1) / sd_pooled
+    
+    # sample size
+    n2 <- mean(pre_invasion2$years) + mean(post_invasion20$years)
+    
+    # Variance D
+    v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+    
+    # Correction factor
+    j = 1 - (3 / (4*(n2 - 1) - 1))
+    
+    if (n2 == 2) {
+      g = d
+      v_g = v_d
+    } else {
+      
+      # Hedges G
+      g = j * d 
+      # Variance
+      v_g = j^2 * v_d
+    }
+
+        new_row <- data.frame(
+          site_id = n, taxa = sp, Pre = Y1, Post = Y2,
+          sample_size = n2, G_Hedges = g,
+          variance_G = v_g, Stage = s
+        )
+        
+        results_df1 <- rbind(results_df1, new_row)
+      }
+      
+      cat(paste0("Completed time series: ", n, "\n"))
+}
+s = "late"
+
+
+results_df1 = results_df1 %>% drop_na()
+results_df1$taxa = "Richness"
+
+### Abundance ----
+
+results_df2 <- data.frame()
+
+for (s in stage) {
+  
+  if(s =="early") {
+    time_series <-time_series1
+  } else {
+    time_series <-time_series2
+  }
+  
+  for (n in time_series) {
+    
+    pre_invasion1 <- pre_invasion[pre_invasion$site_id == n, ]
+    if(s =="early") {
+      post_invasion <-post_invasion1
+    } else {
+      post_invasion <-post_invasion2
+    }
+    
+    post_invasion0 <- post_invasion[post_invasion$site_id == n, ]
+  
+    if (n %in% unique(post_invasion0$site_id) ) {
+      post_invasion11 <- post_invasion0[post_invasion0$site_id ==n, ] # post
+
+    }  else {
+      message("no match time series")
+      next 
+    }
+    
+    
+  species <- unique(pre_invasion1$taxon)
+  
+  for (sp in species) {
+    
+    pre_invasion2 <- pre_invasion1[pre_invasion1$taxon ==sp, ] # filter by each sp
+    
+    if (sp %in% post_invasion11$taxon) { 
+      post_invasion20 <- post_invasion11[post_invasion11$taxon ==sp, ] # filter by each metric
+    } else {
+      message("no match las especies")
+      next 
+    }
+    
+    metric_pre <- pre_invasion2$abundance
+    metric_post <- post_invasion20$abundance
+    
+    std_dev_pre <- sd(metric_pre)
+    std_dev_post <- sd(metric_post)
+    
+    Y1 <- mean(metric_pre, na.rm=T)
+    Y2 <- mean(metric_post, na.rm=T)
+    
+    n_pre <- length(metric_pre)
+    n_post <- length(metric_post)
+    
+    # Calculate pooled standard deviation
+    sd_pooled <- sqrt(((n_pre - 1) * std_dev_pre^2 + (n_post - 1) * std_dev_post^2) / (n_pre + n_post - 2))
+    
+    # Cohens D 
+    d <- (Y2-Y1) / sd_pooled
+    
+    # sample size
+    n2 <- n_pre + n_post
+    
+    # Variance D
+    v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+    
+    # Correction factor
+    j = 1 - (3 / (4*(n2 - 1) - 1))
+    
+    if (n2 == 2) {
+      g = d
+      v_g = v_d
+    } else {
+      
+      # Hedges G
+      g = j * d 
+      # Variance
+      v_g = j^2 * v_d
+    }
+    
+    new_row <- data.frame(
+      site_id = n, taxa = sp, Pre = Y1, Post = Y2,
+      sample_size = n2, G_Hedges = g,
+      variance_G = v_g, Stage = s
+    )
+    
+    results_df2 <- rbind(results_df2, new_row)
+  }
+  
+  cat(paste0("Completed time series: ", n, "\n"))
+  }
+  s = "late"
+}
+results_df2 = results_df2 %>% drop_na()
+
+
+### Functional metrics - Eco
+
+setwd("C:/Users/Propietario/Desktop/Pre_Post_invasion/")
+
+traits <- read_xlsx("Traits_eco.xlsx")
+r <- 0.5
+results_df3 <- data.frame()
+
+for (s in stage) {
+  
+  if(s =="early") {
+    time_series <-time_series1
+  } else {
+    time_series <-time_series2
+  }
+  
+  for (n in time_series) {
+    
+    pre_invasion1 <- pre_invasion[pre_invasion$site_id == n, ]
+    if(s =="early") {
+      post_invasion <-post_invasion1
+    } else {
+      post_invasion <-post_invasion2
+    }
+    
+    post_invasion0 <- post_invasion[post_invasion$site_id == n, ]
+    
+    if (n %in% unique(post_invasion1$site_id) ) {
+      traits1 <- traits[traits$site_id ==n, ] # post
+    }  else {
+      message("no match time series")
+      next 
+    }
+    
+    
+    pre_invasion2 <- pre_invasion1 %>% left_join(traits1, by=c("site_id", "year"))
+    pre_invasion2 <- pre_invasion2[,c("site_id", "year",".",  "metric")]
+    pre_invasion2 <- pre_invasion2[!duplicated(pre_invasion2[c("site_id", "year",".", "metric")]), ]
+    
+    post_invasion2 <- post_invasion1 %>% left_join(traits1, by=c("site_id", "year"))
+    post_invasion2 <- post_invasion2[,c("site_id", "year",".",  "metric")]
+    post_invasion2 <- post_invasion2[post_invasion2$site_id ==n, ] # post
+    
+    post_invasion2 <- post_invasion2[!duplicated(post_invasion2[c("site_id", "year",".", "metric")]), ]
+    
+    
+    for( col in unique(traits1$metric)) {
+      
+      pre_invasion3 <- pre_invasion2[pre_invasion2$metric == col, ] # filter by each metric
+      post_invasion3 <- post_invasion2[post_invasion2$metric == col, ] # filter by each metric
+      
+      
+      metric_pre <- pre_invasion3$.
+      metric_post <- post_invasion3$.
+      
+      std_dev_pre <- sd(metric_pre)
+      std_dev_post <- sd(metric_post)
+      
+      Y1 <- mean(metric_pre, na.rm=T)
+      Y2 <- mean(metric_post, na.rm=T)
+      
+      n_pre <- length(metric_pre)
+      n_post <- length(metric_post)
+      
+      # Calculate pooled standard deviation
+      sd_pooled <- sqrt(((n_pre - 1) * std_dev_pre^2 + (n_post - 1) * std_dev_post^2) / (n_pre + n_post - 2))
+      
+      # Cohens D 
+      d <- (Y2-Y1) / sd_pooled
+      
+      # sample size
+      n2 <- n_pre + n_post
+      
+      # Variance D
+      v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+      
+      # Correction factor
+      j = 1 - (3 / (4*(n2 - 1) - 1))
+      
+      # Hedges G
+      g = j * d 
+      # Variance
+      v_g = j^2 * v_d
+      
+      new_row <- data.frame(
+        site_id = n, taxa = col, Pre = Y1, Post = Y2,
+        sample_size = n2, G_Hedges = g,
+        variance_G = v_g, Stage = s
+      )
+      
+      results_df3 <- rbind(results_df3, new_row)
+    }
+    
+    cat(paste0("Completed time series: ", n, "\n"))
+  }
+  s = "late"
+}
+
+results_df3 = results_df3 %>% drop_na()
+
+
+
+
+### Functional metrics - BIO
+
+setwd("C:/Users/Propietario/Desktop/Pre_Post_invasion/")
+
+traits <- read_xlsx("Traits_bio.xlsx")
+r <- 0.5
+results_df4 <- data.frame()
+
+for (s in stage) {
+  
+  if(s =="early") {
+    time_series <-time_series1
+  } else {
+    time_series <-time_series2
+  }
+  
+  for (n in time_series) {
+    
+    pre_invasion1 <- pre_invasion[pre_invasion$site_id == n, ]
+    if(s =="early") {
+      post_invasion <-post_invasion1
+    } else {
+      post_invasion <-post_invasion2
+    }
+    
+    post_invasion0 <- post_invasion[post_invasion$site_id == n, ]
+    
+    if (n %in% unique(post_invasion1$site_id) ) {
+      traits1 <- traits[traits$site_id ==n, ] # post
+    }  else {
+      message("no match time series")
+      next 
+    }
+    
+    
+    pre_invasion2 <- pre_invasion1 %>% left_join(traits1, by=c("site_id", "year"))
+    pre_invasion2 <- pre_invasion2[,c("site_id", "year",".",  "metric")]
+    pre_invasion2 <- pre_invasion2[!duplicated(pre_invasion2[c("site_id", "year",".", "metric")]), ]
+    
+    post_invasion2 <- post_invasion1 %>% left_join(traits1, by=c("site_id", "year"))
+    post_invasion2 <- post_invasion2[,c("site_id", "year",".",  "metric")]
+    post_invasion2 <- post_invasion2[post_invasion2$site_id ==n, ] # post
+    
+    post_invasion2 <- post_invasion2[!duplicated(post_invasion2[c("site_id", "year",".", "metric")]), ]
+    
+    
+    for( col in unique(traits1$metric)) {
+      
+      pre_invasion3 <- pre_invasion2[pre_invasion2$metric == col, ] # filter by each metric
+      post_invasion3 <- post_invasion2[post_invasion2$metric == col, ] # filter by each metric
+      
+      
+      metric_pre <- pre_invasion3$.
+      metric_post <- post_invasion3$.
+      
+      std_dev_pre <- sd(metric_pre)
+      std_dev_post <- sd(metric_post)
+      
+      Y1 <- mean(metric_pre, na.rm=T)
+      Y2 <- mean(metric_post, na.rm=T)
+      
+      n_pre <- length(metric_pre)
+      n_post <- length(metric_post)
+      
+      # Calculate pooled standard deviation
+      sd_pooled <- sqrt(((n_pre - 1) * std_dev_pre^2 + (n_post - 1) * std_dev_post^2) / (n_pre + n_post - 2))
+      
+      # Cohens D 
+      d <- (Y2-Y1) / sd_pooled
+      
+      # sample size
+      n2 <- n_pre + n_post
+      
+      # Variance D
+      v_d = (1/n2 + d^2/(2*n2)) * 2 * (1 - r)
+      
+      # Correction factor
+      j = 1 - (3 / (4*(n2 - 1) - 1))
+      
+      # Hedges G
+      g = j * d 
+      # Variance
+      v_g = j^2 * v_d
+      
+      new_row <- data.frame(
+        site_id = n, taxa = col, Pre = Y1, Post = Y2,
+        sample_size = n2, G_Hedges = g,
+        variance_G = v_g, Stage = s
+      )
+      
+      results_df4 <- rbind(results_df4, new_row)
+    }
+    
+    cat(paste0("Completed time series: ", n, "\n"))
+  }
+  s = "late"
+}
+
+results_df4 = results_df4 %>% drop_na()
+
+
+res = rbind(results_df1,results_df2,results_df3,results_df4)
+
+res_clean1<- res %>%
+  filter(!(G_Hedges > 5 | G_Hedges < -5)) # outliers
+
+res_clean1 <- res_clean1 %>%
+  mutate(taxa = ifelse(taxa %in% c("Fric_eco","Fric_bio", "FEve_eco","FEve_bio", "FDis_eco","FDis_bio",
+                                   "Richness"), taxa, "Abundance"))
+
+###### Visualization of effect sizes #####
+
+res_clean <- data1 
+res_clean1<- res_clean %>%
+  filter(!(G_Hedges > 5 | G_Hedges < -5)) # outliers
+
+res_clean1 <- res_clean1 %>%
+  mutate(taxa = ifelse(taxa %in% c("Fric_eco","Fric_bio", "FEve_eco","FEve_bio", "FDis_eco","FDis_bio",
+                                   "Richness"), taxa, "Abundance"))
+
+
+ggplot(res_clean1, aes(x = G_Hedges)) +
+  geom_density() +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  facet_wrap(~ taxa, scales = "free") +
+  theme_bw() +xlim(-5,5)+
+  labs(title = "Density Plot of G_Hedges",
+       x = "G_Hedges",
+       y = "Density")
