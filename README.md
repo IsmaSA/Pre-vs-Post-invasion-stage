@@ -26,8 +26,7 @@ Biological invasions pose a major threat to biodiversity, ecosystem functioning,
 - R (version 4.0.0 or higher) --> I used v4.3.1
 
 - ## How to us this repository
-- **Data**: Contains the raw and processed data used in our analyses.
-- **Scripts**: Includes all R scripts for replicating the study's results.
+- **Code**: Includes all R scripts for replicating the study's results.
 - **Figures**: Visual representations of key insights from our data.
 
 For citation and licensing information, please view [CITATION.md](CITATION.md).
