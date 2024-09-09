@@ -11,27 +11,27 @@ data_summary <- data1 %>% mutate(taxa2 =paste0(taxa,"_", site_id)) %>%
 
 overall_effect <- data.frame(
   taxa = "Overall",
-  G_Hedges_mean = 0.071,
-  lower_ci = meta_6$ci.lb, 
-  upper_ci = meta_6$ci.ub  #
-)
+  G_Hedges_mean = 0.030,
+  lower_ci = -0.01, 
+  upper_ci = 0.07)
 
 nudge <- 0.5  
 overall_y <- -1  
 
-p1<- ggplot(data = data_summary, aes(x = G_Hedges_mean, y = reorder(taxa2, -G_Hedges_mean))) + 
+p0<- ggplot(data = data_summary, aes(x = G_Hedges_mean, y = reorder(taxa2, -G_Hedges_mean))) + 
   geom_errorbarh(aes(xmin = lower_ci, xmax = upper_ci),
                  height = 0, size = 0.5, color = "grey", 
                  position = position_nudge(y = nudge)) + 
   geom_point(size = 0.8, color = "darkgreen", 
              position = position_nudge(y = nudge)) +
   geom_vline(xintercept = 0, linetype = 2, size =1) +
-  geom_hline(yintercept = nudge - 1, color = alpha("black", 0.5), linetype = 5, size = 1) + 
-  annotate("text", x = -4.2, y = overall_y, label= "Overall estimate", size = 4, adj = "right", fontface = "bold") +
+  geom_hline(yintercept = nudge - 1, color = "black", linetype = 5, size = 1) + 
+  #annotate("text", x = -4.2, y = overall_y, label= "Overall estimate", size = 4, adj = "right", fontface = "bold") +
   scale_y_discrete(expand = c(0.025, 0.01)) +
   xlab("Effect size (Hedges' G)") +
   ylab("Study case") +
   scale_x_continuous(breaks=c(-8,-6,-4,-2,0,2,4,6,8))+
+  # Insert overall estimate
   geom_errorbarh(aes(xmin = overall_effect$lower_ci, xmax = overall_effect$upper_ci, y = overall_y), 
                  color = "grey") +
   geom_point(data = overall_effect, aes(x = G_Hedges_mean, y = overall_y), size = 3, color = "forestgreen") +
@@ -42,9 +42,9 @@ p1<- ggplot(data = data_summary, aes(x = G_Hedges_mean, y = reorder(taxa2, -G_He
         axis.line.y = element_line(color = "black"),
         axis.title = element_text(size = 14),
         panel.grid.major.y = element_blank(), 
-        legend.position = "none"
-  )
+        legend.position = "none" )
 
+# lets stry the orchard plot: 
 install.packages("pacman")
 pacman::p_load(devtools, tidyverse, metafor, patchwork, R.rsp, emmeans)
 
@@ -52,13 +52,11 @@ devtools::install_github("daniel1noble/orchaRd", force = TRUE)
 library(orchaRd)
 orchaRd::orchard_plot
 
-model_results <- orchaRd::mod_results(meta_7.1, mod = "1", at = NULL,  group = "site_id")
-model_results
-p2 <- orchaRd::orchard_plot(meta_6, mod = "1", group = "site_id", 
+p0.1 <- orchaRd::orchard_plot(meta6, mod = "1", group = "site_id", 
                             xlab = "Standardised mean difference", 
-                            transfm = "none", trunk.size = 12, alpha = 0.2)
+                            transfm = "none", trunk.size = 10, alpha = 0.2)
 
-p2 <- p2 + 
+p0.1 <- p0.1 + 
   scale_color_manual(values = "forestgreen", aesthetics = c("color", "fill")) + # Change point colors and fill
   theme(axis.text.x = element_text(size = 12, color = "black"),
         axis.text.y = element_blank(),
@@ -70,4 +68,4 @@ p2 <- p2 +
   )+
   ylab("Effect size (Hedges' G)")
 
-p1 + p2
+p2 + p1
