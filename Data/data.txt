@@ -1,6 +1,11 @@
 
 ## Divergent temporal responses of native macroinvertebrate communities to biological invasions
-**Running title:** Temporal responses of macroinvertebrates to invasions
+*Running title:* Temporal responses of macroinvertebrates to invasions
 
 Ismael Soto1,*, Rafael L. Macêdo2,3,4, Lais Carneiro5, Elizabeta Briski6, Antonín Kouba1, Ross N. Cuthbert7,✝ , Phillip J. Haubrock1,8,9,✝
 
+### Data Availability Statement
+
+The data supporting the findings of this study are available alongside the accompanying publication (Divergent temporal responses of native macroinvertebrate communities to biological invasions). For detailed information on how the data were collected, processed, and analyzed, please refer to the methods section of the paper.
+
+- If you have any further questions or require additional clarification, feel free to contact the corresponding author (Ismael Soto*).
